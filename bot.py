@@ -5,6 +5,7 @@ import psycopg2
 import asyncio
 import os
 from dotenv import load_dotenv
+
 load_dotenv()
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
@@ -35,7 +36,6 @@ def save_message(user_id, username, message, role):
 
 # Функция загрузки истории сообщений из БД
 def get_chat_history(user_id, limit=5):
-    """Загружает последние `limit` сообщений пользователя из базы данных."""
     try:
         conn = psycopg2.connect(**DB_PARAMS)
         cur = conn.cursor()
@@ -49,16 +49,14 @@ def get_chat_history(user_id, limit=5):
         cur.close()
         conn.close()
 
-        # Преобразуем историю в формат, понятный OpenAI
         history = [{"role": role, "content": text} for role, text in reversed(messages)]
         return history
     except Exception as e:
         print(f"Ошибка при загрузке истории чата: {e}")
         return []
 
-# Очистка старых сообщений (если их становится слишком много)
+# Очистка старых сообщений
 def cleanup_old_messages(user_id, max_messages=50):
-    """Удаляет самые старые сообщения, если их больше `max_messages`."""
     try:
         conn = psycopg2.connect(**DB_PARAMS)
         cur = conn.cursor()
@@ -87,12 +85,12 @@ async def start(update: Update, context: CallbackContext):
 # Функция запроса к GPT
 def get_gpt_response(user_id, user_message):
     try:
-        chat_history = get_chat_history(user_id)  # Загружаем историю чата
-        chat_history.append({"role": "user", "content": user_message})  # Добавляем новый вопрос
+        chat_history = get_chat_history(user_id)
+        chat_history.append({"role": "user", "content": user_message})
 
         response = client.chat.completions.create(
             model="gpt-4-turbo",
-            messages=chat_history  # Отправляем историю вместе с новым вопросом
+            messages=chat_history
         )
         return response.choices[0].message.content
     except Exception as e:
@@ -101,28 +99,41 @@ def get_gpt_response(user_id, user_message):
 # Обработчик текстовых сообщений
 async def handle_messages(update: Update, context: CallbackContext):
     if not update.message or not update.message.text:
-        return  # Игнорируем сообщения без текста (например, фото, видео)
+        return  
 
     user = update.message.from_user
     user_message = update.message.text
     save_message(user.id, user.username, user_message, "user")
-    cleanup_old_messages(user.id)  # Очищаем старые сообщения, если их стало слишком много
+    cleanup_old_messages(user.id)
 
     if CREATOR_NAME.lower() in user_message.lower():
         bot_reply = f"{CREATOR_NAME} — мой создатель! ❤️"
     else:
         await context.bot.send_chat_action(chat_id=update.message.chat_id, action="typing")
         await asyncio.sleep(2)
-        bot_reply = get_gpt_response(user.id, user_message)  # Учитываем историю чата
+        bot_reply = get_gpt_response(user.id, user_message)
 
     save_message(user.id, "AblGpt", bot_reply, "assistant")
     await update.message.reply_text(bot_reply, quote=True, parse_mode="MARKDOWN")
 
+# 📌 Обработчик упоминания бота в группе
+async def mention_handler(update: Update, context: CallbackContext):
+    """Функция для ответа на упоминание бота в группе."""
+    message = update.message
+    bot_username = context.bot.username  # Получаем @username бота
+
+    if f"@{bot_username}" in message.text:
+        await message.reply_text(f"Привет, {message.from_user.first_name}! Ты меня звал? 😊")
+
 # Запуск бота
 def main():
     app = Application.builder().token(TELEGRAM_TOKEN).build()
+    
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_messages))
+    
+    # 🆕 Добавляем обработчик упоминаний бота в группе
+    app.add_handler(MessageHandler(filters.TEXT & filters.ChatType.GROUPS, mention_handler))
 
     print("Бот запущен...")
 
