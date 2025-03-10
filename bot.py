@@ -1,10 +1,11 @@
-from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext
+from telegram import Update, InlineQueryResultArticle, InputTextMessageContent
+from telegram.ext import Application, CommandHandler, MessageHandler, InlineQueryHandler, filters, CallbackContext
 from openai import OpenAI
 import psycopg2
 import asyncio
 import os
 from dotenv import load_dotenv
+from uuid import uuid4
 
 load_dotenv()
 
@@ -125,6 +126,25 @@ async def mention_handler(update: Update, context: CallbackContext):
     if f"@{bot_username}" in message.text:
         await message.reply_text(f"Привет, {message.from_user.first_name}! Ты меня звал? 😊")
 
+# 📌 Inline-режим: бот работает без добавления в группу
+async def inline_query(update: Update, context: CallbackContext):
+    """Обработчик inline-запросов (когда пишут @твой_бот в чате)."""
+    query = update.inline_query.query  # Получаем текст после @бот
+    
+    if not query:
+        return  # Если нет запроса, ничего не делаем
+
+    # Формируем ответ
+    result = [
+        InlineQueryResultArticle(
+            id=str(uuid4()),
+            title="Ответ от бота",
+            input_message_content=InputTextMessageContent(f"Ты написал: {query}")
+        )
+    ]
+
+    await update.inline_query.answer(result)
+
 # Запуск бота
 def main():
     app = Application.builder().token(TELEGRAM_TOKEN).build()
@@ -134,6 +154,9 @@ def main():
     
     # 🆕 Добавляем обработчик упоминаний бота в группе
     app.add_handler(MessageHandler(filters.TEXT & filters.ChatType.GROUPS, mention_handler))
+
+    # 🆕 Добавляем inline-запросы (@username в любом чате)
+    app.add_handler(InlineQueryHandler(inline_query))
 
     print("Бот запущен...")
 
