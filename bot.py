@@ -134,19 +134,26 @@ async def inline_query(update: Update, context: CallbackContext):
     if not query:
         return  # Если нет запроса, ничего не делаем
 
-    # Генерируем ответ с помощью GPT
-    gpt_response = get_gpt_response(update.inline_query.from_user.id, query)
+    user_id = update.inline_query.from_user.id  # Получаем ID пользователя
 
-    # Формируем ответ
-    result = [
-        InlineQueryResultArticle(
-            id=str(uuid4()),
-            title="Ответ от GPT",
-            input_message_content=InputTextMessageContent(gpt_response)
-        )
-    ]
+    try:
+        # Запрашиваем ответ у GPT
+        gpt_response = await asyncio.to_thread(get_gpt_response, user_id, query)
 
-    await update.inline_query.answer(result)
+        # Формируем ответ
+        result = [
+            InlineQueryResultArticle(
+                id=str(uuid4()),
+                title="Ответ от GPT",
+                input_message_content=InputTextMessageContent(gpt_response)
+            )
+        ]
+
+        await update.inline_query.answer(result)
+    
+    except Exception as e:
+        print(f"Ошибка в inline_query: {e}")
+
 
 
 # Запуск бота
