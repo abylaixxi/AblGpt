@@ -32,8 +32,10 @@ def save_message(user_id, username, message, role):
         conn.commit()
         cur.close()
         conn.close()
+        print(f"✅ Сообщение сохранено в БД: {message} (от {username})")
     except Exception as e:
-        print(f"Ошибка при сохранении сообщения: {e}")
+        print(f"❌ Ошибка при сохранении сообщения: {e}")
+
 
 # Функция загрузки истории сообщений из БД
 def get_chat_history(user_id, limit=5):
