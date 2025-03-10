@@ -13,9 +13,10 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 DB_PARAMS = {
-    "dbname": "AblGpt",
-    "user": "postgres",
-    "host": "localhost",
+    "dbname": "AblGpt",  # Из Render
+    "user": "ablgpt_user",  # Из Render
+    "password": "xinvXYYvTKS1pC8Nsl78HHEy98PjGsMF",  # Из Render
+    "host": "dpg-cv7l64jtq21c73cesmag-a.render.com",  # Internal Database URL (не localhost!)
     "port": "5432"
 }
 
