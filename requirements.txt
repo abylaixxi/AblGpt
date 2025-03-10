@@ -1,0 +1,5 @@
+python-telegram-bot
+openai
+psycopg2
+python-dotenv
+asyncio
