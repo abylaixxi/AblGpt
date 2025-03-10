@@ -153,8 +153,8 @@ async def inline_query(update: Update, context: CallbackContext):
             )
         ]
 
-        await update.inline_query.answer(result, quote=True, parse_mode="MARKDOWN")
-
+        await update.inline_query.answer(result)
+        
     
     except Exception as e:
         print(f"Ошибка в inline_query: {e}")
