@@ -134,16 +134,20 @@ async def inline_query(update: Update, context: CallbackContext):
     if not query:
         return  # Если нет запроса, ничего не делаем
 
+    # Генерируем ответ с помощью GPT
+    gpt_response = get_gpt_response(update.inline_query.from_user.id, query)
+
     # Формируем ответ
     result = [
         InlineQueryResultArticle(
             id=str(uuid4()),
-            title="Ответ от бота",
-            input_message_content=InputTextMessageContent(f"Ты написал: {query}")
+            title="Ответ от GPT",
+            input_message_content=InputTextMessageContent(gpt_response)
         )
     ]
 
     await update.inline_query.answer(result)
+
 
 # Запуск бота
 def main():
