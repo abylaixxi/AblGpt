@@ -31,11 +31,12 @@ def save_message(user_id, username, message, role):
         cur.execute("INSERT INTO messages (user_id, username, message, role) VALUES (%s, %s, %s, %s)",
                     (user_id, username, message, role))
         conn.commit()
-        cur.close()
-        conn.close()
-        print(f"✅ Сообщение сохранено в БД: {message} (от {username})")
+        print(f"✅ Данные успешно записаны: {user_id}, {username}, {message}, {role}")
     except Exception as e:
         print(f"❌ Ошибка при сохранении сообщения: {e}")
+    finally:
+        cur.close()
+        conn.close()
 
 
 # Функция загрузки истории сообщений из БД
