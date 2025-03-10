@@ -140,7 +140,11 @@ async def inline_query(update: Update, context: CallbackContext):
         # Запрашиваем ответ у GPT
         gpt_response = await asyncio.to_thread(get_gpt_response, user_id, query)
 
-        # Формируем ответ
+        # Ограничиваем длину ответа (не больше 1024 символов)
+        if len(gpt_response) > 1024:
+            gpt_response = gpt_response[:1020] + "..."
+
+        # Формируем inline-ответ
         result = [
             InlineQueryResultArticle(
                 id=str(uuid4()),
@@ -153,6 +157,7 @@ async def inline_query(update: Update, context: CallbackContext):
     
     except Exception as e:
         print(f"Ошибка в inline_query: {e}")
+
 
 
 
