@@ -70,6 +70,53 @@ async def inline_query(update: Update, context: CallbackContext):
     except Exception as e:
         print(f"Ошибка в inline_query: {e}")
 
+
+# Храним историю общения с пользователем
+user_chat_history = {}
+
+async def handle_messages(update: Update, context: CallbackContext):
+    if not update.message or not update.message.text:
+        return  
+
+    user = update.message.from_user
+    user_id = user.id
+    user_message = update.message.text
+
+    # Если у пользователя уже есть история, используем её
+    if user_id not in user_chat_history:
+        user_chat_history[user_id] = []
+
+    # Проверяем, не повторяется ли бот
+    last_bot_responses = user_chat_history[user_id][-5:]  # Берём 5 последних ответов
+
+    await context.bot.send_chat_action(chat_id=update.message.chat_id, action="typing")
+    await asyncio.sleep(2)
+
+    bot_reply = get_gpt_response(user_message)
+
+    # Если ответ бота уже был несколько раз – меняем его
+    if bot_reply in last_bot_responses:
+        bot_reply = f"Раньше я так уже отвечал. Попробую по-другому:\n\n{get_gpt_response(user_message + ' (по-другому)')}"
+
+    # Запоминаем историю
+    user_chat_history[user_id].append(bot_reply)
+
+    await update.message.reply_text(bot_reply, quote=True, parse_mode="MARKDOWN")
+
+
+bot_errors = {}
+
+def get_gpt_response(user_message):
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4-turbo",
+            messages=[{"role": "user", "content": user_message}]
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        bot_errors[user_message] = str(e)  # Запоминаем ошибки
+        return f"Ошибка OpenAI: {str(e)}"
+
 # Запуск бота
 def main():
     app = Application.builder().token(TELEGRAM_TOKEN).build()
