@@ -1,7 +1,6 @@
 from telegram import Update, InlineQueryResultArticle, InputTextMessageContent
 from telegram.ext import Application, CommandHandler, MessageHandler, InlineQueryHandler, filters, CallbackContext
 from openai import OpenAI
-import psycopg2
 import asyncio
 import os
 from dotenv import load_dotenv
@@ -16,48 +15,6 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 client = OpenAI(api_key=OPENAI_API_KEY)
 CREATOR_NAME = "Абылай"
 
-
-# Функция загрузки истории сообщений из БД
-def get_chat_history(user_id, limit=5):
-    try:
-        conn = psycopg2.connect(**DB_PARAMS)
-        cur = conn.cursor()
-        cur.execute("""
-            SELECT role, message FROM messages 
-            WHERE user_id = %s 
-            ORDER BY id DESC 
-            LIMIT %s
-        """, (user_id, limit))
-        messages = cur.fetchall()
-        cur.close()
-        conn.close()
-
-        history = [{"role": role, "content": text} for role, text in reversed(messages)]
-        return history
-    except Exception as e:
-        print(f"Ошибка при загрузке истории чата: {e}")
-        return []
-
-# Очистка старых сообщений
-def cleanup_old_messages(user_id, max_messages=50):
-    try:
-        conn = psycopg2.connect(**DB_PARAMS)
-        cur = conn.cursor()
-        cur.execute("""
-            DELETE FROM messages 
-            WHERE user_id = %s 
-            AND id NOT IN (
-                SELECT id FROM messages 
-                WHERE user_id = %s 
-                ORDER BY id DESC 
-                LIMIT %s
-            )
-        """, (user_id, user_id, max_messages))
-        conn.commit()
-        cur.close()
-        conn.close()
-    except Exception as e:
-        print(f"Ошибка при очистке сообщений: {e}")
 
 # Команда /start
 async def start(update: Update, context: CallbackContext):
