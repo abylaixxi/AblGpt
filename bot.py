@@ -117,7 +117,7 @@ def main():
     print("Бот запущен...")
 
     try:
-        app.run_polling()
+        app.run_webhook(listen="0.0.0.0", port=8443, url_path=TELEGRAM_TOKEN)
     except Exception as e:
         print(f"Ошибка в работе бота: {e}")
     finally:
