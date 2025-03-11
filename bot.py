@@ -80,7 +80,7 @@ async def handle_messages(update: Update, context: CallbackContext):
 
     user = update.message.from_user
     user_id = user.id
-    user_message = update.message.text
+    user_message = update.message.text.lower().strip()
 
     # Если у пользователя уже есть история, используем её
     if user_id not in user_chat_history:
@@ -89,6 +89,10 @@ async def handle_messages(update: Update, context: CallbackContext):
     # Проверяем, не повторяется ли бот
     last_bot_responses = user_chat_history[user_id][-5:]  # Берём 5 последних ответов
 
+    # Если сообщение - короткое (типа "нет", "а") и бот уже недавно отвечал, не дублируем ответ
+    if len(user_message) < 3 and last_bot_responses and "Привет!" in last_bot_responses[-1]:
+        return  
+
     await context.bot.send_chat_action(chat_id=update.message.chat_id, action="typing")
     await asyncio.sleep(2)
 
@@ -96,12 +100,13 @@ async def handle_messages(update: Update, context: CallbackContext):
 
     # Если ответ бота уже был несколько раз – меняем его
     if bot_reply in last_bot_responses:
-        bot_reply = f"Раньше я так уже отвечал. Попробую по-другому:\n\n{get_gpt_response(user_message + ' (по-другому)')}"
+        bot_reply = f"Я уже так отвечал. Попробую по-другому:\n\n{get_gpt_response(user_message + ' (по-другому)')}"
 
     # Запоминаем историю
     user_chat_history[user_id].append(bot_reply)
 
     await update.message.reply_text(bot_reply, quote=True, parse_mode="MARKDOWN")
+
 
 
 bot_errors = {}
