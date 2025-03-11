@@ -3,3 +3,5 @@ openai
 psycopg2
 python-dotenv
 asyncio
+
+python-telegram-bot[webhooks]
