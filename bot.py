@@ -12,31 +12,9 @@ load_dotenv()
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-DB_PARAMS = {
-    "dbname": "AblGpt",  # Из Render
-    "user": "ablgpt_user",  # Из Render
-    "password": "xinvXYYvTKS1pC8Nsl78HHEy98PjGsMF",  # Из Render
-    "host": "dpg-cv7l64jtq21c73cesmag-a.render.com",  # Internal Database URL (не localhost!)
-    "port": "5432"
-}
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 CREATOR_NAME = "Абылай"
-
-# Функция для сохранения сообщений в БД
-def save_message(user_id, username, message, role):
-    try:
-        conn = psycopg2.connect(**DB_PARAMS)
-        cur = conn.cursor()
-        cur.execute("INSERT INTO messages (user_id, username, message, role) VALUES (%s, %s, %s, %s)",
-                    (user_id, username, message, role))
-        conn.commit()
-        print(f"✅ Данные успешно записаны: {user_id}, {username}, {message}, {role}")
-    except Exception as e:
-        print(f"❌ Ошибка при сохранении сообщения: {e}")
-    finally:
-        cur.close()
-        conn.close()
 
 
 # Функция загрузки истории сообщений из БД
