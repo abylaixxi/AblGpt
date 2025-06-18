@@ -6,6 +6,7 @@ import os
 from dotenv import load_dotenv
 from uuid import uuid4
 
+# Загрузка переменных окружения из .env файла
 load_dotenv()
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
@@ -15,7 +16,7 @@ WEBHOOK_URL = f"https://ablgpt.onrender.com/{TELEGRAM_TOKEN}"  # Webhook URL
 client = OpenAI(api_key=OPENAI_API_KEY)
 CREATOR_NAME = "Абылай"
 
-# Храним историю общения
+# История чатов и ошибки
 user_chat_history = {}
 bot_errors = {}
 
@@ -23,11 +24,11 @@ bot_errors = {}
 async def start(update: Update, context: CallbackContext):
     await update.message.reply_text("Привет! Я AblGpt. Чем могу помочь?")
 
-# Запрос к GPT
+# Функция обращения к OpenAI
 def get_gpt_response(user_message):
     try:
         response = client.chat.completions.create(
-            model="gpt-4-turbo",
+            model="gpt-3.5-turbo",  # заменили с gpt-4-turbo
             messages=[{"role": "user", "content": user_message}]
         )
         return response.choices[0].message.content
@@ -35,10 +36,10 @@ def get_gpt_response(user_message):
         bot_errors[user_message] = str(e)
         return f"Ошибка OpenAI: {str(e)}"
 
-# Обработка обычных сообщений
+# Обработка входящих сообщений
 async def handle_messages(update: Update, context: CallbackContext):
     if not update.message or not update.message.text:
-        return  
+        return
 
     user = update.message.from_user
     user_id = user.id
@@ -50,7 +51,7 @@ async def handle_messages(update: Update, context: CallbackContext):
     last_bot_responses = user_chat_history[user_id][-5:]
 
     if len(user_message) < 3 and last_bot_responses and "Привет!" in last_bot_responses[-1]:
-        return  
+        return
 
     await context.bot.send_chat_action(chat_id=update.message.chat_id, action="typing")
     await asyncio.sleep(2)
@@ -68,7 +69,7 @@ async def handle_messages(update: Update, context: CallbackContext):
         reply_to_message_id=update.message.message_id
     )
 
-# Обработка упоминания в группах
+# Обработка упоминания бота в группах
 async def mention_handler(update: Update, context: CallbackContext):
     message = update.message
     bot_username = context.bot.username
@@ -80,7 +81,7 @@ async def mention_handler(update: Update, context: CallbackContext):
 async def inline_query(update: Update, context: CallbackContext):
     query = update.inline_query.query
     if not query:
-        return  
+        return
 
     try:
         gpt_response = await asyncio.to_thread(get_gpt_response, query)
@@ -95,10 +96,10 @@ async def inline_query(update: Update, context: CallbackContext):
     except Exception as e:
         print(f"Ошибка в inline_query: {e}")
 
-# Запуск
+# Запуск бота
 def main():
     app = Application.builder().token(TELEGRAM_TOKEN).build()
-    
+
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_messages))
     app.add_handler(MessageHandler(filters.TEXT & filters.ChatType.GROUPS, mention_handler))
@@ -120,5 +121,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
