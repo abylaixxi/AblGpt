@@ -9,23 +9,25 @@ from telegram.ext import (
     InlineQueryHandler, CallbackContext, filters
 )
 from telegram.constants import ChatAction
-from openai import OpenAI
+import openai
 
 # Загрузка переменных окружения
 load_dotenv()
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-WEBHOOK_URL = f"https://ablgpt.onrender.com/{TELEGRAM_TOKEN}"  # Webhook URL для Render
+AIML_API_KEY = os.getenv("AIML_API_KEY")
 
-# OpenAI клиент
-client = OpenAI(api_key=OPENAI_API_KEY)
+# Указываем кастомный OpenAI endpoint (AIMLAPI)
+openai.api_key = AIML_API_KEY
+openai.base_url = "https://api.aimlapi.com/v1"
+
+WEBHOOK_URL = f"https://ablgpt.onrender.com/{TELEGRAM_TOKEN}"  # Webhook URL
 
 # История пользователей и ошибок
 CREATOR_NAME = "Абылай"
 user_chat_history = {}
 bot_errors = {}
 
-# Экранирование HTML-символов для Telegram
+# Экранирование HTML
 def escape_html(text):
     return html.escape(text)
 
@@ -33,19 +35,19 @@ def escape_html(text):
 async def start(update: Update, context: CallbackContext):
     await update.message.reply_text("Привет! Я AblGpt. Чем могу помочь?")
 
-# Запрос к GPT
+# Запрос к AIMLAPI (совместим с OpenAI API)
 def get_gpt_response(user_message: str) -> str:
     try:
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",  # или другой, доступный у тебя на AIMLAPI
             messages=[{"role": "user", "content": user_message}]
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
         bot_errors[user_message] = str(e)
-        return f"Ошибка OpenAI: {str(e)}"
+        return f"Ошибка GPT: {str(e)}"
 
-# Обработка сообщений
+# Ответ на текстовые сообщения
 async def handle_messages(update: Update, context: CallbackContext):
     if not update.message or not update.message.text:
         return
@@ -56,9 +58,6 @@ async def handle_messages(update: Update, context: CallbackContext):
 
     user_chat_history.setdefault(user_id, [])
     last_bot_responses = user_chat_history[user_id][-5:]
-
-    if len(user_message) < 3 and last_bot_responses and "Привет!" in last_bot_responses[-1]:
-        return
 
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
     await asyncio.sleep(1)
@@ -78,7 +77,7 @@ async def handle_messages(update: Update, context: CallbackContext):
         reply_to_message_id=update.message.message_id
     )
 
-# Обработка упоминаний бота в группах
+# Ответ на упоминание в группе
 async def mention_handler(update: Update, context: CallbackContext):
     message = update.message
     if not message or not message.text:
@@ -107,7 +106,7 @@ async def inline_query(update: Update, context: CallbackContext):
     except Exception as e:
         print(f"Ошибка в inline_query: {e}")
 
-# Основной запуск
+# Запуск
 def main():
     app = Application.builder().token(TELEGRAM_TOKEN).build()
 
