@@ -1,6 +1,6 @@
 import os
 import asyncio
-import re
+import html
 from uuid import uuid4
 from dotenv import load_dotenv
 from telegram import Update, InlineQueryResultArticle, InputTextMessageContent
@@ -8,33 +8,32 @@ from telegram.ext import (
     Application, CommandHandler, MessageHandler,
     InlineQueryHandler, CallbackContext, filters
 )
-from openai import OpenAI
 from telegram.constants import ChatAction
+from openai import OpenAI
 
 # Загрузка переменных окружения
 load_dotenv()
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-WEBHOOK_URL = f"https://ablgpt.onrender.com/{TELEGRAM_TOKEN}"  # Webhook для Render
+WEBHOOK_URL = f"https://ablgpt.onrender.com/{TELEGRAM_TOKEN}"  # Webhook URL для Render
 
-# Инициализация OpenAI (v1 SDK)
+# OpenAI клиент
 client = OpenAI(api_key=OPENAI_API_KEY)
 
-# Данные и история
+# История пользователей и ошибок
 CREATOR_NAME = "Абылай"
 user_chat_history = {}
 bot_errors = {}
 
-# Экранирование Markdown v1
-def escape_markdown(text):
-    escape_chars = r'\*_`\['
-    return re.sub(f'([{re.escape(escape_chars)}])', r'\\\1', text)
+# Экранирование HTML-символов для Telegram
+def escape_html(text):
+    return html.escape(text)
 
 # Команда /start
 async def start(update: Update, context: CallbackContext):
     await update.message.reply_text("Привет! Я AblGpt. Чем могу помочь?")
 
-# Запрос к OpenAI
+# Запрос к GPT
 def get_gpt_response(user_message: str) -> str:
     try:
         response = client.chat.completions.create(
@@ -46,7 +45,7 @@ def get_gpt_response(user_message: str) -> str:
         bot_errors[user_message] = str(e)
         return f"Ошибка OpenAI: {str(e)}"
 
-# Ответ на сообщения
+# Обработка сообщений
 async def handle_messages(update: Update, context: CallbackContext):
     if not update.message or not update.message.text:
         return
@@ -71,15 +70,15 @@ async def handle_messages(update: Update, context: CallbackContext):
 
     user_chat_history[user_id].append(bot_reply)
 
-    escaped_reply = escape_markdown(bot_reply)
+    escaped_reply = escape_html(bot_reply)
 
     await update.message.reply_text(
         escaped_reply,
-        parse_mode="Markdown",
+        parse_mode="HTML",
         reply_to_message_id=update.message.message_id
     )
 
-# Упоминание в группе
+# Обработка упоминаний бота в группах
 async def mention_handler(update: Update, context: CallbackContext):
     message = update.message
     if not message or not message.text:
@@ -108,7 +107,7 @@ async def inline_query(update: Update, context: CallbackContext):
     except Exception as e:
         print(f"Ошибка в inline_query: {e}")
 
-# Запуск
+# Основной запуск
 def main():
     app = Application.builder().token(TELEGRAM_TOKEN).build()
 
