@@ -13,34 +13,45 @@ from telegram.constants import ChatAction
 # Загрузка переменных окружения
 load_dotenv()
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")  # Переименовано
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 WEBHOOK_URL = f"https://ablgpt.onrender.com/{TELEGRAM_TOKEN}"
 
-# Подключение к OpenRouter через OpenAI SDK
+# Подключение к OpenRouter API через OpenAI SDK
 client = OpenAI(
-    base_url="https://openrouter.ai/api/v1",  # Обязательно именно так
+    base_url="https://openrouter.ai/api/v1",
     api_key=OPENROUTER_API_KEY,
     default_headers={
-        "HTTP-Referer": "https://yourdomain.com",  # Заменить на свой домен или оставить как есть
-        "X-Title": "AblGpt Telegram Bot"
+        "HTTP-Referer": "https://ablgpt.onrender.com",
+        "X-Title": "AblGpt"
     }
 )
 
-# История чатов
+# Хранилище истории чатов
 user_chat_history = {}
 
 # Команда /start
 async def start(update: Update, context: CallbackContext):
-    await update.message.reply_text("Привет! Я AblGpt. Чем могу помочь?")
+    await update.message.reply_text("Привет! Я AblGpt на базе OpenRouter. Чем могу помочь?")
 
-# Получение ответа от OpenRouter
-def get_gpt_response(user_message: str) -> str:
+# Получение ответа от модели с контекстом
+def get_gpt_response(user_id: int, user_message: str) -> str:
     try:
+        # Получение текущей истории, если нет — создаём
+        chat_history = user_chat_history.get(user_id, [])
+        chat_history.append({"role": "user", "content": user_message})
+
         response = client.chat.completions.create(
-            model="openai/gpt-3.5-turbo",  # Или другой доступный на OpenRouter
-            messages=[{"role": "user", "content": user_message}]
+            model="openai/gpt-3.5-turbo",  # или другой доступный через OpenRouter
+            messages=chat_history
         )
-        return response.choices[0].message.content.strip()
+
+        bot_reply = response.choices[0].message.content.strip()
+        chat_history.append({"role": "assistant", "content": bot_reply})
+
+        # Сохраняем обновлённую историю
+        user_chat_history[user_id] = chat_history[-20:]  # сохраняем только последние 20 сообщений
+
+        return bot_reply
     except Exception as e:
         return f"Ошибка GPT: {e}"
 
@@ -52,19 +63,17 @@ async def handle_messages(update: Update, context: CallbackContext):
     user_id = update.message.from_user.id
     user_message = update.message.text.strip()
 
-    user_chat_history.setdefault(user_id, [])
-    last_bot_responses = user_chat_history[user_id][-5:]
-
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
     await asyncio.sleep(1)
 
-    bot_reply = get_gpt_response(user_message)
-
-    if bot_reply in last_bot_responses:
-        bot_reply = f"Я уже так отвечал. Попробую по-другому:\n\n{get_gpt_response(user_message + ' (иначе)')}"
-
-    user_chat_history[user_id].append(bot_reply)
+    bot_reply = await asyncio.to_thread(get_gpt_response, user_id, user_message)
     await update.message.reply_text(bot_reply)
+
+# Команда для сброса истории чата
+async def reset(update: Update, context: CallbackContext):
+    user_id = update.message.from_user.id
+    user_chat_history[user_id] = []
+    await update.message.reply_text("История чата сброшена.")
 
 # Обработка упоминаний в группах
 async def mention_handler(update: Update, context: CallbackContext):
@@ -83,7 +92,7 @@ async def inline_query(update: Update, context: CallbackContext):
         return
 
     try:
-        gpt_response = await asyncio.to_thread(get_gpt_response, query)
+        gpt_response = await asyncio.to_thread(get_gpt_response, update.inline_query.from_user.id, query)
         result = [
             InlineQueryResultArticle(
                 id=str(uuid4()),
@@ -100,6 +109,7 @@ def main():
     app = Application.builder().token(TELEGRAM_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("reset", reset))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_messages))
     app.add_handler(MessageHandler(filters.TEXT & filters.ChatType.GROUPS, mention_handler))
     app.add_handler(InlineQueryHandler(inline_query))
