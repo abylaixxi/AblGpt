@@ -13,13 +13,17 @@ from telegram.constants import ChatAction
 # Загрузка переменных окружения
 load_dotenv()
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-AIML_API_KEY = os.getenv("AIML_API_KEY")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")  # Переименовано
 WEBHOOK_URL = f"https://ablgpt.onrender.com/{TELEGRAM_TOKEN}"
 
-# Подключение к AIMLAPI через OpenAI SDK
+# Подключение к OpenRouter через OpenAI SDK
 client = OpenAI(
-    base_url="https://api.aimlapi.com/v1",
-    api_key=AIML_API_KEY
+    base_url="https://openrouter.ai/api/v1",  # Обязательно именно так
+    api_key=OPENROUTER_API_KEY,
+    default_headers={
+        "HTTP-Referer": "https://yourdomain.com",  # Заменить на свой домен или оставить как есть
+        "X-Title": "AblGpt Telegram Bot"
+    }
 )
 
 # История чатов
@@ -29,11 +33,11 @@ user_chat_history = {}
 async def start(update: Update, context: CallbackContext):
     await update.message.reply_text("Привет! Я AblGpt. Чем могу помочь?")
 
-# Получение ответа от AIMLAPI
+# Получение ответа от OpenRouter
 def get_gpt_response(user_message: str) -> str:
     try:
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo-instruct",  # Используем бесплатную модель
+            model="openai/gpt-3.5-turbo",  # Или другой доступный на OpenRouter
             messages=[{"role": "user", "content": user_message}]
         )
         return response.choices[0].message.content.strip()
