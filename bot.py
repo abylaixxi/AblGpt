@@ -38,22 +38,34 @@ def get_gpt_response(user_id: int, user_message: str) -> str:
     try:
         # Получение текущей истории, если нет — создаём
         chat_history = user_chat_history.get(user_id, [])
+
+        # Добавляем system prompt один раз
+        if not chat_history or chat_history[0]["role"] != "system":
+            chat_history.insert(0, {
+                "role": "system",
+                "content": "Ты — AblGpt, дружелюбный и умный Telegram-бот. Всегда называй себя AblGpt, отвечай понятно и вежливо. Ты помогаешь пользователям, как AI-помощник."
+            })
+
+        # Добавляем текущее сообщение пользователя
         chat_history.append({"role": "user", "content": user_message})
 
+        # Запрос к модели
         response = client.chat.completions.create(
-            model="openai/gpt-3.5-turbo",  # или другой доступный через OpenRouter
+            model="openai/gpt-3.5-turbo",  # или другая модель
             messages=chat_history
         )
 
+        # Ответ от бота
         bot_reply = response.choices[0].message.content.strip()
-        chat_history.append({"role": "assistant", "content": bot_reply})
 
-        # Сохраняем обновлённую историю
-        user_chat_history[user_id] = chat_history[-20:]  # сохраняем только последние 20 сообщений
+        # Сохраняем в историю
+        chat_history.append({"role": "assistant", "content": bot_reply})
+        user_chat_history[user_id] = chat_history[-20:]  # Обрезаем историю
 
         return bot_reply
     except Exception as e:
         return f"Ошибка GPT: {e}"
+
 
 # Обработка обычных сообщений
 async def handle_messages(update: Update, context: CallbackContext):
