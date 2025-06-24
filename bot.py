@@ -1,9 +1,8 @@
 import os
 import asyncio
-import html
-import requests
-from uuid import uuid4
 from dotenv import load_dotenv
+from uuid import uuid4
+from openai import OpenAI
 from telegram import Update, InlineQueryResultArticle, InputTextMessageContent
 from telegram.ext import (
     Application, CommandHandler, MessageHandler,
@@ -11,51 +10,42 @@ from telegram.ext import (
 )
 from telegram.constants import ChatAction
 
-# Загрузка .env
+# Загрузка переменных окружения
 load_dotenv()
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 AIML_API_KEY = os.getenv("AIML_API_KEY")
 WEBHOOK_URL = f"https://ablgpt.onrender.com/{TELEGRAM_TOKEN}"
 
-# История чатов и ошибок
+# Подключение к AIMLAPI через OpenAI SDK
+client = OpenAI(
+    base_url="https://api.aimlapi.com/v1",
+    api_key=AIML_API_KEY
+)
+
+# История чатов
 user_chat_history = {}
-bot_errors = {}
 
-# Экранирование HTML
-def escape_html(text):
-    return html.escape(text)
-
-# /start
+# Команда /start
 async def start(update: Update, context: CallbackContext):
     await update.message.reply_text("Привет! Я AblGpt. Чем могу помочь?")
 
-# Запрос к AIMLAPI напрямую через requests
+# Получение ответа от AIMLAPI
 def get_gpt_response(user_message: str) -> str:
     try:
-        url = "https://api.aimlapi.com/v1/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {AIML_API_KEY}",
-            "Content-Type": "application/json"
-        }
-        data = {
-            "model": "gpt-3.5-turbo",
-            "messages": [{"role": "user", "content": user_message}]
-        }
-
-        response = requests.post(url, json=data, headers=headers)
-        response.raise_for_status()
-
-        return response.json()["choices"][0]["message"]["content"].strip()
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo-instruct",  # Используем бесплатную модель
+            messages=[{"role": "user", "content": user_message}]
+        )
+        return response.choices[0].message.content.strip()
     except Exception as e:
-        return f"Ошибка GPT: {str(e)}"
+        return f"Ошибка GPT: {e}"
 
-# Обработка сообщений
+# Обработка обычных сообщений
 async def handle_messages(update: Update, context: CallbackContext):
     if not update.message or not update.message.text:
         return
 
-    user = update.message.from_user
-    user_id = user.id
+    user_id = update.message.from_user.id
     user_message = update.message.text.strip()
 
     user_chat_history.setdefault(user_id, [])
@@ -67,18 +57,12 @@ async def handle_messages(update: Update, context: CallbackContext):
     bot_reply = get_gpt_response(user_message)
 
     if bot_reply in last_bot_responses:
-        bot_reply = f"Я уже так отвечал. Попробую по-другому:\n\n{get_gpt_response(user_message + ' (по-другому)')}"
+        bot_reply = f"Я уже так отвечал. Попробую по-другому:\n\n{get_gpt_response(user_message + ' (иначе)')}"
 
     user_chat_history[user_id].append(bot_reply)
-    escaped_reply = escape_html(bot_reply)
+    await update.message.reply_text(bot_reply)
 
-    await update.message.reply_text(
-        escaped_reply,
-        parse_mode="HTML",
-        reply_to_message_id=update.message.message_id
-    )
-
-# Обработка упоминания бота в группах
+# Обработка упоминаний в группах
 async def mention_handler(update: Update, context: CallbackContext):
     message = update.message
     if not message or not message.text:
@@ -107,7 +91,7 @@ async def inline_query(update: Update, context: CallbackContext):
     except Exception as e:
         print(f"Ошибка в inline_query: {e}")
 
-# Основной запуск
+# Запуск бота
 def main():
     app = Application.builder().token(TELEGRAM_TOKEN).build()
 
@@ -126,9 +110,7 @@ def main():
             webhook_url=WEBHOOK_URL
         )
     except Exception as e:
-        print(f"Ошибка в работе бота: {e}")
-    finally:
-        print("Бот остановлен.")
+        print(f"Ошибка при запуске: {e}")
 
 if __name__ == "__main__":
     main()
