@@ -1,7 +1,4 @@
-python-telegram-bot
-openai
-psycopg2
-python-dotenv
-asyncio
-
 python-telegram-bot[webhooks]
+python-dotenv
+psycopg2
+requests
