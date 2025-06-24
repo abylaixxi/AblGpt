@@ -1,60 +1,68 @@
-from telegram import Update, InlineQueryResultArticle, InputTextMessageContent
-from telegram.ext import Application, CommandHandler, MessageHandler, InlineQueryHandler, filters, CallbackContext
-from openai import OpenAI
-import asyncio
 import os
-from dotenv import load_dotenv
+import asyncio
+import re
 from uuid import uuid4
+from dotenv import load_dotenv
+from telegram import Update, InlineQueryResultArticle, InputTextMessageContent
+from telegram.ext import (
+    Application, CommandHandler, MessageHandler,
+    InlineQueryHandler, CallbackContext, filters
+)
+from openai import OpenAI
+from telegram.constants import ChatAction
 
-# Загрузка переменных окружения из .env файла
+# Загрузка переменных окружения
 load_dotenv()
-
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-WEBHOOK_URL = f"https://ablgpt.onrender.com/{TELEGRAM_TOKEN}"  # Webhook URL
+WEBHOOK_URL = f"https://ablgpt.onrender.com/{TELEGRAM_TOKEN}"  # Webhook для Render
 
+# Инициализация OpenAI (v1 SDK)
 client = OpenAI(api_key=OPENAI_API_KEY)
-CREATOR_NAME = "Абылай"
 
-# История чатов и ошибки
+# Данные и история
+CREATOR_NAME = "Абылай"
 user_chat_history = {}
 bot_errors = {}
+
+# Экранирование Markdown v1
+def escape_markdown(text):
+    escape_chars = r'\*_`\['
+    return re.sub(f'([{re.escape(escape_chars)}])', r'\\\1', text)
 
 # Команда /start
 async def start(update: Update, context: CallbackContext):
     await update.message.reply_text("Привет! Я AblGpt. Чем могу помочь?")
 
-# Функция обращения к OpenAI
-def get_gpt_response(user_message):
+# Запрос к OpenAI
+def get_gpt_response(user_message: str) -> str:
     try:
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo",  # заменили с gpt-4-turbo
+            model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": user_message}]
         )
-        return response.choices[0].message.content
+        return response.choices[0].message.content.strip()
     except Exception as e:
         bot_errors[user_message] = str(e)
         return f"Ошибка OpenAI: {str(e)}"
 
-# Обработка входящих сообщений
+# Ответ на сообщения
 async def handle_messages(update: Update, context: CallbackContext):
     if not update.message or not update.message.text:
         return
 
     user = update.message.from_user
     user_id = user.id
-    user_message = update.message.text.lower().strip()
+    user_message = update.message.text.strip()
 
-    if user_id not in user_chat_history:
-        user_chat_history[user_id] = []
-
+    user_chat_history.setdefault(user_id, [])
     last_bot_responses = user_chat_history[user_id][-5:]
 
     if len(user_message) < 3 and last_bot_responses and "Привет!" in last_bot_responses[-1]:
         return
 
-    await context.bot.send_chat_action(chat_id=update.message.chat_id, action="typing")
-    await asyncio.sleep(2)
+    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
+    await asyncio.sleep(1)
 
     bot_reply = get_gpt_response(user_message)
 
@@ -63,17 +71,21 @@ async def handle_messages(update: Update, context: CallbackContext):
 
     user_chat_history[user_id].append(bot_reply)
 
+    escaped_reply = escape_markdown(bot_reply)
+
     await update.message.reply_text(
-        bot_reply,
-        parse_mode="MARKDOWN",
+        escaped_reply,
+        parse_mode="Markdown",
         reply_to_message_id=update.message.message_id
     )
 
-# Обработка упоминания бота в группах
+# Упоминание в группе
 async def mention_handler(update: Update, context: CallbackContext):
     message = update.message
-    bot_username = context.bot.username
+    if not message or not message.text:
+        return
 
+    bot_username = context.bot.username
     if f"@{bot_username}" in message.text:
         await message.reply_text(f"Привет, {message.from_user.first_name}! Ты меня звал? 😊")
 
@@ -96,7 +108,7 @@ async def inline_query(update: Update, context: CallbackContext):
     except Exception as e:
         print(f"Ошибка в inline_query: {e}")
 
-# Запуск бота
+# Запуск
 def main():
     app = Application.builder().token(TELEGRAM_TOKEN).build()
 
