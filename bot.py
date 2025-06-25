@@ -46,7 +46,7 @@ def get_gpt_response(user_id: int, user_message: str) -> str:
         user_chat_history[user_id].append({"role": "user", "content": user_message})
 
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="openai/gpt-3.5-turbo",
             messages=user_chat_history[user_id],
             max_tokens=1000,
         )
