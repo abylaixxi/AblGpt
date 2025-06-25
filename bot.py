@@ -16,7 +16,7 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 WEBHOOK_URL = f"https://ablgpt.onrender.com/{TELEGRAM_TOKEN}"
 
-# Подключение к OpenRouter API через OpenAI SDK
+# Подключение к OpenRouter через OpenAI SDK
 client = OpenAI(
     base_url="https://openrouter.ai/api/v1",
     api_key=OPENROUTER_API_KEY,
@@ -26,46 +26,41 @@ client = OpenAI(
     }
 )
 
-# Хранилище истории чатов
+# История общения
 user_chat_history = {}
+
+# Начальное системное сообщение
+SYSTEM_PROMPT = {
+    "role": "system",
+    "content": "Ты AblGpt — умный и дружелюбный Telegram-бот. Всегда представляйся как AblGpt, если спрашивают имя."
+}
 
 # Команда /start
 async def start(update: Update, context: CallbackContext):
-    await update.message.reply_text("Привет! Я AblGpt на базе OpenRouter. Чем могу помочь?")
+    await update.message.reply_text("Привет! Я AblGpt. Чем могу помочь?")
 
-# Получение ответа от модели с контекстом
+# Получение ответа от GPT через OpenRouter
 def get_gpt_response(user_id: int, user_message: str) -> str:
     try:
-        # Получение текущей истории, если нет — создаём
-        chat_history = user_chat_history.get(user_id, [])
+        user_chat_history.setdefault(user_id, [SYSTEM_PROMPT.copy()])
+        user_chat_history[user_id].append({"role": "user", "content": user_message})
 
-        # Добавляем system prompt один раз
-        if not chat_history or chat_history[0]["role"] != "system":
-            chat_history.insert(0, {
-                "role": "system",
-                "content": "Ты — AblGpt, дружелюбный и умный Telegram-бот. Всегда называй себя AblGpt, отвечай понятно и вежливо. Ты помогаешь пользователям, как AI-помощник."
-            })
-
-        # Добавляем текущее сообщение пользователя
-        chat_history.append({"role": "user", "content": user_message})
-
-        # Запрос к модели
         response = client.chat.completions.create(
-            model="openai/gpt-3.5-turbo",  # или другая модель
-            messages=chat_history
+            model="gpt-3.5-turbo",
+            messages=user_chat_history[user_id],
+            max_tokens=1000,
         )
 
-        # Ответ от бота
         bot_reply = response.choices[0].message.content.strip()
+        user_chat_history[user_id].append({"role": "assistant", "content": bot_reply})
 
-        # Сохраняем в историю
-        chat_history.append({"role": "assistant", "content": bot_reply})
-        user_chat_history[user_id] = chat_history[-20:]  # Обрезаем историю
+        # Ограничим историю, чтобы она не стала слишком длинной
+        if len(user_chat_history[user_id]) > 20:
+            user_chat_history[user_id] = [SYSTEM_PROMPT.copy()] + user_chat_history[user_id][-18:]
 
         return bot_reply
     except Exception as e:
         return f"Ошибка GPT: {e}"
-
 
 # Обработка обычных сообщений
 async def handle_messages(update: Update, context: CallbackContext):
@@ -81,12 +76,6 @@ async def handle_messages(update: Update, context: CallbackContext):
     bot_reply = await asyncio.to_thread(get_gpt_response, user_id, user_message)
     await update.message.reply_text(bot_reply)
 
-# Команда для сброса истории чата
-async def reset(update: Update, context: CallbackContext):
-    user_id = update.message.from_user.id
-    user_chat_history[user_id] = []
-    await update.message.reply_text("История чата сброшена.")
-
 # Обработка упоминаний в группах
 async def mention_handler(update: Update, context: CallbackContext):
     message = update.message
@@ -95,7 +84,7 @@ async def mention_handler(update: Update, context: CallbackContext):
 
     bot_username = context.bot.username
     if f"@{bot_username}" in message.text:
-        await message.reply_text(f"Привет, {message.from_user.first_name}! Ты меня звал? 😊")
+        await message.reply_text(f"Привет, {message.from_user.first_name}! Я AblGpt. Чем могу помочь?")
 
 # Inline-режим
 async def inline_query(update: Update, context: CallbackContext):
@@ -103,25 +92,25 @@ async def inline_query(update: Update, context: CallbackContext):
     if not query:
         return
 
+    user_id = update.inline_query.from_user.id
     try:
-        gpt_response = await asyncio.to_thread(get_gpt_response, update.inline_query.from_user.id, query)
+        gpt_response = await asyncio.to_thread(get_gpt_response, user_id, query)
         result = [
             InlineQueryResultArticle(
                 id=str(uuid4()),
-                title="Ответ от GPT",
+                title="Ответ от AblGpt",
                 input_message_content=InputTextMessageContent(gpt_response)
             )
         ]
         await update.inline_query.answer(result)
     except Exception as e:
-        print(f"Ошибка в inline_query: {e}")
+        print(f"Ошибка inline: {e}")
 
 # Запуск бота
 def main():
     app = Application.builder().token(TELEGRAM_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("reset", reset))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_messages))
     app.add_handler(MessageHandler(filters.TEXT & filters.ChatType.GROUPS, mention_handler))
     app.add_handler(InlineQueryHandler(inline_query))
@@ -136,7 +125,7 @@ def main():
             webhook_url=WEBHOOK_URL
         )
     except Exception as e:
-        print(f"Ошибка при запуске: {e}")
+        print(f"Ошибка запуска: {e}")
 
 if __name__ == "__main__":
     main()
