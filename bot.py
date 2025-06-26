@@ -1,5 +1,6 @@
 import os
 import asyncio
+import logging
 from dotenv import load_dotenv
 from uuid import uuid4
 from openai import OpenAI
@@ -9,6 +10,9 @@ from telegram.ext import (
     InlineQueryHandler, CallbackContext, filters
 )
 from telegram.constants import ChatAction
+
+# Включаем логгирование
+logging.basicConfig(level=logging.INFO)
 
 # Загрузка переменных окружения
 load_dotenv()
@@ -32,7 +36,12 @@ user_chat_history = {}
 # Начальное системное сообщение
 SYSTEM_PROMPT = {
     "role": "system",
-    "content": "Ты AblGpt — умный и дружелюбный Telegram-бот. Всегда представляйся как AblGpt, если спрашивают имя."
+    "content": (
+        "Ты AblGpt — умный, дружелюбный Telegram-бот. "
+        "Ты помогаешь людям, отвечаешь чётко и понятно. "
+        "Если пользователь спрашивает, как тебя зовут, кто ты или с кем он говорит — обязательно отвечай, что ты AblGpt. "
+        "Не прикидывайся человеком. Ты — бот."
+    )
 }
 
 # Команда /start
@@ -51,7 +60,10 @@ def get_gpt_response(user_id: int, user_message: str) -> str:
             max_tokens=1000,
         )
 
-        bot_reply = response.choices[0].message.content.strip()
+        # Поддержка как .message.content, так и .text (на всякий случай)
+        reply = getattr(response.choices[0], "message", None)
+        bot_reply = reply.content.strip() if reply else response.choices[0].text.strip()
+
         user_chat_history[user_id].append({"role": "assistant", "content": bot_reply})
 
         # Ограничим историю, чтобы она не стала слишком длинной
@@ -60,6 +72,7 @@ def get_gpt_response(user_id: int, user_message: str) -> str:
 
         return bot_reply
     except Exception as e:
+        logging.error(f"Ошибка GPT: {e}")
         return f"Ошибка GPT: {e}"
 
 # Обработка обычных сообщений
@@ -104,7 +117,7 @@ async def inline_query(update: Update, context: CallbackContext):
         ]
         await update.inline_query.answer(result)
     except Exception as e:
-        print(f"Ошибка inline: {e}")
+        logging.error(f"Ошибка inline: {e}")
 
 # Запуск бота
 def main():
@@ -115,7 +128,7 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & filters.ChatType.GROUPS, mention_handler))
     app.add_handler(InlineQueryHandler(inline_query))
 
-    print("Бот запущен...")
+    logging.info("Бот запущен...")
 
     try:
         app.run_webhook(
@@ -125,7 +138,7 @@ def main():
             webhook_url=WEBHOOK_URL
         )
     except Exception as e:
-        print(f"Ошибка запуска: {e}")
+        logging.error(f"Ошибка запуска: {e}")
 
 if __name__ == "__main__":
     main()
